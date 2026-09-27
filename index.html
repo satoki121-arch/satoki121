@@ -59,8 +59,10 @@ p { text-wrap: pretty; }
   position: fixed; inset: 0 0 auto 0; z-index: 50;
   padding-top: env(safe-area-inset-top, 0px);
   color: var(--ink);
-  transition: background-color .4s ease, color .4s ease, box-shadow .4s ease;
+  transition: background-color .4s ease, color .4s ease, box-shadow .4s ease, opacity .3s ease, visibility .3s;
 }
+/* while the four curtains are mid-opening the header sits over both red and cream, so it steps aside */
+.site-header.mid-open { opacity: 0; visibility: hidden; }
 .site-header .bar {
   height: var(--header-h);
   display: flex; align-items: center; justify-content: space-between; gap: 24px;
@@ -120,14 +122,18 @@ body.nav-open .menu-btn .lines::after { transform: translateY(-4.25px) rotate(-2
 .scene .glow { fill: var(--yellow); }
 .scene .who { fill: var(--muted); font-family: var(--serif); font-size: 13px; letter-spacing: .2em; text-anchor: middle; }
 
+/* four triangular curtains meeting at the centre, opening up / down / left / right */
+.curtain-base { position: absolute; inset: 0; z-index: 3; background: var(--red); }
 .curtain {
-  position: absolute; left: 0; right: 0; height: 50.5%;
-  background: var(--red);
+  position: absolute; inset: 0; z-index: 3;
   will-change: transform;
-  z-index: 3;
+  pointer-events: none;
 }
-.curtain.top { top: 0; box-shadow: inset 0 -1px 0 var(--red-deep), 0 18px 40px -20px rgba(74, 14, 19, .5); background: linear-gradient(180deg, var(--red-deep) 0%, var(--red) 55%); }
-.curtain.bottom { bottom: 0; box-shadow: inset 0 1px 0 var(--red-deep), 0 -18px 40px -20px rgba(74, 14, 19, .5); background: linear-gradient(0deg, var(--red-deep) 0%, var(--red) 55%); }
+.curtain .panel { position: absolute; inset: 0; }
+.curtain.top .panel { clip-path: polygon(0 0, 100% 0, 50% 50%); background: linear-gradient(180deg, var(--red-deep) 0%, var(--red) 55%); }
+.curtain.bottom .panel { clip-path: polygon(0 100%, 100% 100%, 50% 50%); background: linear-gradient(0deg, var(--red-deep) 0%, var(--red) 55%); }
+.curtain.left .panel { clip-path: polygon(0 0, 0 100%, 50% 50%); background: linear-gradient(90deg, var(--red-deep) 0%, var(--red) 55%); }
+.curtain.right .panel { clip-path: polygon(100% 0, 100% 100%, 50% 50%); background: linear-gradient(270deg, var(--red-deep) 0%, var(--red) 55%); }
 
 .v-copy {
   position: absolute; inset: 0; z-index: 4;
@@ -186,12 +192,14 @@ body.nav-open .menu-btn .lines::after { transform: translateY(-4.25px) rotate(-2
 .play-btn {
   pointer-events: auto;
   display: inline-flex; align-items: center; gap: 10px;
-  background: transparent; border: 1px solid currentColor; color: inherit;
+  background: var(--red); border: 1px solid currentColor; color: inherit;
   border-radius: 999px; padding: 9px 20px 9px 14px; cursor: pointer;
+  transition: background-color .4s ease;
   font-size: .8rem; letter-spacing: .14em;
 }
-.play-btn:hover { background: rgba(255, 255, 255, .08); }
-.stage-ui.on-cream .play-btn:hover { background: rgba(142, 27, 34, .06); }
+.play-btn:hover { background: var(--red-deep); }
+.stage-ui.on-cream .play-btn { background: var(--cream); }
+.stage-ui.on-cream .play-btn:hover { background: var(--paper); }
 .play-btn svg { width: 18px; height: 18px; }
 .play-btn .i-pause { display: none; }
 .play-btn[data-state="playing"] .i-play { display: none; }
@@ -218,7 +226,7 @@ body.nav-open .menu-btn .lines::after { transform: translateY(-4.25px) rotate(-2
   html { scroll-behavior: auto; }
   .hero { height: auto; }
   .stage { position: relative; height: 100vh; height: 100svh; min-height: 560px; }
-  .curtain, .v-copy, .stage-ui, .scroll-hint { display: none; }
+  .curtain, .curtain-base, .v-copy, .stage-ui, .scroll-hint { display: none; }
   .finale { opacity: 1; pointer-events: auto; }
   .scroll-hint i { animation: none; }
 }
@@ -471,8 +479,11 @@ body.nav-open .menu-btn .lines::after { transform: translateY(-4.25px) rotate(-2
         </div>
       </div>
 
-      <div class="curtain top" id="curtainTop" aria-hidden="true"></div>
-      <div class="curtain bottom" id="curtainBottom" aria-hidden="true"></div>
+      <div class="curtain-base" id="curtainBase" aria-hidden="true"></div>
+      <div class="curtain left" id="curtainLeft" aria-hidden="true"><div class="panel"></div></div>
+      <div class="curtain right" id="curtainRight" aria-hidden="true"><div class="panel"></div></div>
+      <div class="curtain top" id="curtainTop" aria-hidden="true"><div class="panel"></div></div>
+      <div class="curtain bottom" id="curtainBottom" aria-hidden="true"><div class="panel"></div></div>
 
       <div class="v-copy" id="vcopy">
         <h1><span>あなたの評価は、</span><span>そんなもんじゃない。</span></h1>
@@ -875,7 +886,8 @@ body.nav-open .menu-btn .lines::after { transform: translateY(-4.25px) rotate(-2
 
   var header = document.querySelector(".site-header");
   var hero = $("hero"), stage = $("stage"), scene = $("scene");
-  var curtainTop = $("curtainTop"), curtainBottom = $("curtainBottom");
+  var curtainBase = $("curtainBase");
+  var curtains = [[$("curtainTop"), 0, -1], [$("curtainBottom"), 0, 1], [$("curtainLeft"), -1, 0], [$("curtainRight"), 1, 0]];
   var vcopy = $("vcopy"), finale = $("finale"), hint = $("hint"), stageUi = $("stageUi");
   var thread = $("thread"), tip = $("tip"), ringA = $("ringA"), ringB = $("ringB");
   var lens = $("lens"), clipCircle = $("clipCircle"), glow = $("glow");
@@ -905,10 +917,13 @@ body.nav-open .menu-btn .lines::after { transform: translateY(-4.25px) rotate(-2
     vcopy.style.opacity = String(1 - textOut);
     vcopy.style.transform = "translateY(" + (-textOut * 24) + "px)";
     var open = ease(seg(p, .14, .36));
-    curtainTop.style.transform = "translateY(" + (-open * 102) + "%)";
-    curtainBottom.style.transform = "translateY(" + (open * 102) + "%)";
+    // each triangle covers half the stage in its direction; 52% moves it fully out
     var curtainsGone = open >= 1;
-    curtainTop.style.visibility = curtainBottom.style.visibility = curtainsGone ? "hidden" : "visible";
+    curtains.forEach(function (c) {
+      c[0].style.transform = "translate(" + (c[1] * open * 52) + "%, " + (c[2] * open * 52) + "%)";
+      c[0].style.visibility = curtainsGone ? "hidden" : "visible";
+    });
+    curtainBase.style.visibility = open > 0 ? "hidden" : "visible";
     hint.style.opacity = String(1 - seg(p, 0, .05));
 
     // geometry
@@ -945,15 +960,18 @@ body.nav-open .menu-btn .lines::after { transform: translateY(-4.25px) rotate(-2
     finale.style.transform = "translateY(" + ((1 - show) * 16) + "px)";
     finale.classList.toggle("live", show > .5);
 
-    stageUi.classList.toggle("on-cream", open > .9);
+    stageUi.classList.toggle("on-cream", open > .3);
   }
 
   function updateHeader() {
     var rect = hero.getBoundingClientRect();
     var inHero = rect.bottom > 0;
     var p = heroProgress();
-    var onRed = !reduced && inHero && seg(p, .14, .36) < .9 && !document.body.classList.contains("nav-open");
+    var open = reduced ? 1 : seg(p, .14, .36);
+    var navOpen = document.body.classList.contains("nav-open");
+    var onRed = !reduced && inHero && open < .9 && !navOpen;
     header.classList.toggle("on-red", onRed);
+    header.classList.toggle("mid-open", inHero && open > .02 && open < .9 && !navOpen);
     header.classList.toggle("solid", reduced ? window.scrollY > 10 : rect.bottom <= header.offsetHeight);
   }
 
@@ -985,7 +1003,7 @@ body.nav-open .menu-btn .lines::after { transform: translateY(-4.25px) rotate(-2
   }
   function step(t) {
     if (state !== "playing") return;
-    var dt = Math.min(64, t - lastT); lastT = t;
+    var dt = Math.min(250, t - lastT); lastT = t;
     playP = Math.min(1, playP + dt / DURATION);
     scrollToP(playP);
     render(playP); updateHeader();
